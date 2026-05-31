@@ -88,20 +88,20 @@ Write back before moving on.
 
 ---
 
-## Step 4: Regenerate the summary
+## Step 4: Regenerate the HTML summary
 
-After updating the index, write `"${CLAUDE_MANUALS_DIR:-$HOME/Manuals}/MANUALS.md"` — a clean markdown table of all manuals.
+After updating the index, write `"${CLAUDE_MANUALS_DIR:-$HOME/Manuals}/MANUALS.html"` — a self-contained, sortable, filterable browser view of all manuals.
 
-Format:
+The template lives alongside this skill at `templates/MANUALS.template.html`. To regenerate:
 
-```
-| Product | File | Source | Saved | Status |
-|---------|------|--------|-------|--------|
-| Polar H10 Heart Rate Monitor | polar-h10-user-manual.pdf | [Polar Official](url) | 2026-05-21 | ✅ |
-| Whirlpool Fridge ET8WTK | whirlpool-...pdf | [ManualsLib](url) | 2026-05-23 | ⬇ manual |
-```
+1. Read the template file (path: this skill folder + `templates/MANUALS.template.html`).
+2. Read the index at `"${CLAUDE_MANUALS_DIR:-$HOME/Manuals}/.manuals-index.json"`.
+3. Replace the literal placeholder `__MANUALS_DATA__` in the template with `JSON.stringify(index.manuals, null, 2)`. There is exactly one occurrence — do not touch anything else.
+4. Write the result to `"${CLAUDE_MANUALS_DIR:-$HOME/Manuals}/MANUALS.html"`, overwriting any existing file.
 
-Counts at the top: "12 manuals · 11 downloaded · 1 needs manual download"
+The page handles its own sorting (click column headers), filtering (top-of-page search box), stats line, dark mode, and link rendering. No build step, no external dependencies, single self-contained file.
+
+If a stale `MANUALS.md` exists in the same directory, delete it — the HTML replaces it.
 
 ---
 

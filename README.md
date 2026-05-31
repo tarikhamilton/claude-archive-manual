@@ -43,11 +43,13 @@ Inside the manuals directory:
 ```
 <CLAUDE_MANUALS_DIR>/
 ├── .manuals-index.json     ← source of truth, one entry per manual
-├── MANUALS.md              ← human-readable summary table
+├── MANUALS.html            ← sortable + filterable browser view (open in any browser)
 └── *.pdf                   ← the manuals themselves (kebab-case filenames)
 ```
 
 The JSON index tracks each manual's product name, filename, source URL, date saved, and status (`downloaded` or `manual-download` — the latter for cases where no direct PDF exists and the user has to grab it themselves).
+
+`MANUALS.html` is a self-contained page (vanilla JS, no external dependencies, dark-mode aware) generated from the index. Open it in any browser. Click column headers to sort, type in the search box to filter, click filenames to open the PDFs.
 
 ## Use
 
