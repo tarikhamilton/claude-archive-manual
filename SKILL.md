@@ -1,18 +1,21 @@
 ---
 name: archive-manual
-description: Find official instruction manuals or user guides online, download them to ~/Dropbox/Manuals/, maintain a JSON index, and keep MANUALS.md up to date. Use when the user wants to save, find, archive, or download an instruction manual or user guide for any product — or mentions wanting to toss/throw away a physical manual or booklet. Also triggers when the user lists multiple products with manuals to archive.
+description: Find official instruction manuals or user guides online, download them to the user's manuals directory, maintain a JSON index, and keep MANUALS.md up to date. Use when the user wants to save, find, archive, or download an instruction manual or user guide for any product — or mentions wanting to toss/throw away a physical manual or booklet. Also triggers when the user lists multiple products with manuals to archive.
 ---
 
 # Archive Manual
 
-Find official instruction manuals online and save them to ~/Dropbox/Manuals/.
+Find official instruction manuals online and save them to the user's manuals directory.
 
 ## Destination
-~/Dropbox/Manuals/ — create if it doesn't exist.
+
+The destination is the directory referenced by the `CLAUDE_MANUALS_DIR` environment variable. If it is not set, default to `$HOME/Manuals/`. Create the directory if it doesn't exist.
+
+In every shell command in this skill, use the form `"${CLAUDE_MANUALS_DIR:-$HOME/Manuals}"` so the env var is read at execution time and the default works without setup.
 
 File naming: kebab-case, always .pdf
-Good: polar-h10-user-manual.pdf, sonoff-swv-zigbee-water-valve-manual.pdf
-Avoid: manual.pdf, H10_Manual.pdf, names with spaces
+Good: `polar-h10-user-manual.pdf`, `sonoff-swv-zigbee-water-valve-manual.pdf`
+Avoid: `manual.pdf`, `H10_Manual.pdf`, names with spaces
 
 ## Multiple products
 If the user lists several products, search for all in parallel, then download sequentially.
@@ -38,17 +41,21 @@ Get at least two URLs per manual: primary + fallback. Third-party hosts go down.
 Claude Code bash has full network access. Download directly:
 
 ```bash
+DIR="${CLAUDE_MANUALS_DIR:-$HOME/Manuals}"
+mkdir -p "$DIR"
+FILE="$DIR/filename.pdf"
+
 # Check if already exists first
-if [ -s ~/Dropbox/Manuals/filename.pdf ]; then
+if [ -s "$FILE" ]; then
   echo "Already exists, skipping"
 else
-  curl -L -o ~/Dropbox/Manuals/filename.pdf "PRIMARY_URL" --max-time 60 -s
+  curl -L -o "$FILE" "PRIMARY_URL" --max-time 60 -s
   # If that fails, try fallback:
-  [ -s ~/Dropbox/Manuals/filename.pdf ] || curl -L -o ~/Dropbox/Manuals/filename.pdf "FALLBACK_URL" --max-time 60 -s
+  [ -s "$FILE" ] || curl -L -o "$FILE" "FALLBACK_URL" --max-time 60 -s
 fi
 ```
 
-Verify the downloaded file is a real PDF (`head -c 4` should return `%PDF`) before considering it successful. HTML error pages frequently come back as 200s.
+Verify the downloaded file is a real PDF (`head -c 4 "$FILE"` should return `%PDF`) before considering it successful. HTML error pages frequently come back as 200s.
 
 Status: `downloaded` if curl succeeded AND the file is a real PDF, `manual-download` if no direct PDF exists anywhere.
 
@@ -58,7 +65,7 @@ For `manual-download` cases, tell the user the ManualsLib URL and the exact file
 
 ## Step 3: Update the index
 
-Read `~/Dropbox/Manuals/.manuals-index.json`. Create if missing:
+Read `"${CLAUDE_MANUALS_DIR:-$HOME/Manuals}/.manuals-index.json"`. Create if missing:
 
 ```json
 {"manuals": [], "artifact_id": null}
@@ -83,7 +90,7 @@ Write back before moving on.
 
 ## Step 4: Regenerate the summary
 
-After updating the index, write `~/Dropbox/Manuals/MANUALS.md` — a clean markdown table of all manuals.
+After updating the index, write `"${CLAUDE_MANUALS_DIR:-$HOME/Manuals}/MANUALS.md"` — a clean markdown table of all manuals.
 
 Format:
 
