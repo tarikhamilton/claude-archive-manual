@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Manuals</title>
+<script>
+  (function(){
+    try {
+      var t = localStorage.getItem('manuals-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch(e) {}
+  })();
+</script>
 <style>
   :root {
     --bg: #fafafa;
@@ -20,7 +28,7 @@
     --chip-bg: #eef2f7;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #1a1a1a;
       --fg: #e8e8e8;
       --muted: #999;
@@ -35,6 +43,20 @@
       --chip-bg: #2a3140;
     }
   }
+  :root[data-theme="dark"] {
+    --bg: #1a1a1a;
+    --fg: #e8e8e8;
+    --muted: #999;
+    --border: #333;
+    --hover: #2a2a2a;
+    --row-open: #242424;
+    --zebra: #1e1e1e;
+    --panel: #202020;
+    --accent: #58a6ff;
+    --downloaded: #3fb950;
+    --pending: #d29922;
+    --chip-bg: #2a3140;
+  }
   * { box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -46,6 +68,40 @@
   }
   .container { width: 100%; }
   h1 { margin: 0 0 0.25rem; font-size: 1.75rem; }
+  .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  #theme-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    cursor: pointer;
+    color: var(--fg);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    line-height: 0;
+  }
+  #theme-toggle:hover { background: var(--hover); }
+  #theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .theme-icon { display: none; }
+  /* Default = light theme: show moon (click → dark). */
+  .theme-icon-moon { display: inline-block; }
+  /* When OS is dark and no explicit override: show sun. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-icon-moon { display: none; }
+    :root:not([data-theme="light"]) .theme-icon-sun { display: inline-block; }
+  }
+  /* Explicit theme attribute always wins. */
+  :root[data-theme="dark"] .theme-icon-moon { display: none; }
+  :root[data-theme="dark"] .theme-icon-sun { display: inline-block; }
+  :root[data-theme="light"] .theme-icon-sun { display: none; }
+  :root[data-theme="light"] .theme-icon-moon { display: inline-block; }
   .stats { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.9rem; }
   #search {
     width: 100%;
@@ -66,13 +122,13 @@
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.92rem;
+    font-size: 0.88rem;
     table-layout: fixed;
   }
   thead { position: sticky; top: 0; background: var(--bg); z-index: 1; }
   th, td {
     text-align: left;
-    padding: 0.6rem 0.75rem;
+    padding: 0.5rem 0.65rem;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
     word-break: break-word;
@@ -92,7 +148,25 @@
   th.sorted-asc .arrow, th.sorted-desc .arrow { opacity: 1; }
   th.sorted-asc .arrow::after { content: "↑"; }
   th.sorted-desc .arrow::after { content: "↓"; }
-  th.col-toggle { width: 1.8rem; padding-right: 0; cursor: default; }
+  th.col-toggle { width: 2rem; padding-right: 0; cursor: default; }
+  th.col-icon, td.col-icon { display: none; }
+  th.col-icon { width: 2.2rem; padding-right: 0.25rem; cursor: default; }
+  td.col-icon { padding-right: 0.25rem; }
+  th.col-product { width: 28%; }
+  th.col-file { width: 24%; }
+  th.col-source { width: 22%; }
+  th.col-saved { width: 5rem; }
+  th.col-status { width: 9rem; }
+  .file-icon {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    color: var(--accent);
+    opacity: 0.85;
+  }
+  .file-icon:hover { opacity: 1; }
+  .file-icon svg { display: block; }
+  .file-icon-missing { color: var(--muted); opacity: 0.45; cursor: default; }
   tr.row-main { cursor: pointer; background: var(--bg); }
   tr.row-main.zebra { background: var(--zebra); }
   tr.row-main:hover { background: var(--hover); }
@@ -213,31 +287,67 @@
     border-radius: 2px;
     padding: 0 2px;
   }
+  .detail-file .filename { font-size: 0.88rem; word-break: break-all; }
+
+  /* Tablet + mobile: drop the caret-toggle, File, and Source columns from the
+     table; surface File via an inline PDF icon next to Product, and put File
+     + Source in the expansion drawer instead. */
+  @media (max-width: 1023px) {
+    body { padding: 1rem; }
+    table {
+      margin-left: -1rem;
+      margin-right: -1rem;
+      width: calc(100% + 2rem);
+      table-layout: auto;
+      font-size: 0.8rem;
+    }
+    th, td { padding: 0.4rem 0.6rem; }
+    th { font-size: 0.7rem; letter-spacing: 0.03em; }
+    th.col-toggle, td.col-toggle,
+    th.col-file, td.col-file,
+    th.col-source, td.col-source { display: none; }
+    th.col-icon, td.col-icon { display: table-cell; }
+    th.col-icon, td.col-icon { padding-left: 0.6rem; padding-right: 0.15rem; }
+    /* Let Product take the leftover space; shrink Saved + Status to content. */
+    th.col-product, td.col-product { width: auto; }
+    th.col-saved, td.col-saved,
+    th.col-status, td.col-status { width: 1%; white-space: nowrap; }
+    .status { font-size: 0.7rem; padding: 0.1rem 0.4rem; }
+    .detail { padding: 0.75rem 0.9rem 1rem; }
+    .detail h3 { font-size: 0.7rem; }
+    .summary { font-size: 0.88rem; }
+    dl.specs { grid-template-columns: minmax(6rem, auto) 1fr; font-size: 0.82rem; gap: 0.3rem 0.75rem; }
+    ul.features li { font-size: 0.75rem; padding: 0.15rem 0.55rem; }
+    details.tshoot summary { font-size: 0.85rem; }
+  }
+  /* Tiny mobile: drop the icon column too — Product/Saved/Status only. */
+  @media (max-width: 399px) {
+    th.col-icon, td.col-icon { display: none; }
+  }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Manuals</h1>
+  <header class="page-header">
+    <h1>Manuals</h1>
+    <button id="theme-toggle" type="button" aria-label="Toggle dark mode">
+      <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </header>
   <p class="stats" id="stats"></p>
   <input id="search" type="search" placeholder="Filter across product, file, source, summary, specs, troubleshooting, full text&hellip;" autofocus>
   <p class="count" id="count"></p>
   <table>
-    <colgroup>
-      <col style="width:2rem">
-      <col style="width:28%">
-      <col style="width:24%">
-      <col style="width:22%">
-      <col style="width:7rem">
-      <col style="width:10rem">
-    </colgroup>
     <thead>
       <tr>
         <th class="col-toggle"></th>
-        <th data-key="product">Product <span class="arrow"></span></th>
-        <th data-key="filename">File <span class="arrow"></span></th>
-        <th data-key="source_name">Source <span class="arrow"></span></th>
-        <th data-key="date_saved">Saved <span class="arrow"></span></th>
-        <th data-key="status">Status <span class="arrow"></span></th>
+        <th class="col-icon"></th>
+        <th class="col-product" data-key="product">Product <span class="arrow"></span></th>
+        <th class="col-file" data-key="filename">File <span class="arrow"></span></th>
+        <th class="col-source" data-key="source_name">Source <span class="arrow"></span></th>
+        <th class="col-saved" data-key="date_saved">Saved <span class="arrow"></span></th>
+        <th class="col-status" data-key="status">Status <span class="arrow"></span></th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -260,6 +370,13 @@
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+
+  const formatDate = (iso) => {
+    const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(iso || "");
+    return m ? `${m[1].slice(2)}/${+m[2]}/${+m[3]}` : (iso || "");
+  };
+
+  const PDF_SVG = '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4zm0 1h5v4a.5.5 0 0 0 .5.5H13V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm1.5 7.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zm0 2a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5z"/></svg>';
 
   const isEnriched = (m) =>
     Boolean(m.summary || m.specs || m.key_features || (m.troubleshooting && m.troubleshooting.length));
@@ -284,7 +401,7 @@
   function searchableText(m) {
     const parts = [
       m.product, m.filename, m.source_name, m.source_url,
-      m.date_saved, m.status, m.summary, m.full_text,
+      m.date_saved, formatDate(m.date_saved), m.status, m.summary, m.full_text,
     ];
     if (m.specs) parts.push(Object.entries(m.specs).map(([k, v]) => `${k} ${v}`).join(" "));
     if (m.key_features) parts.push(m.key_features.join(" "));
@@ -295,10 +412,21 @@
   }
 
   function detailHTML(m) {
+    const fileLink = m.status === "downloaded"
+      ? `<a href="${esc(m.filename)}" class="filename">${esc(m.filename)}</a>`
+      : `<span class="filename">${esc(m.filename)}</span>`;
+    const fileSection = `<section class="detail-file"><h3>File</h3>${fileLink}</section>`;
+    const sourceSection = (m.source_url || m.source_name)
+      ? `<section class="detail-source"><h3>Source</h3>${
+          m.source_url
+            ? `<a href="${esc(m.source_url)}" target="_blank" rel="noopener">${esc(m.source_name || m.source_url)}</a>`
+            : esc(m.source_name)
+        }</section>`
+      : "";
     if (!isEnriched(m)) {
-      return '<div class="detail"><p class="not-enriched">Not enriched yet. Re-run the archive-manual skill on this entry to populate summary, specs, and troubleshooting.</p></div>';
+      return `<div class="detail">${fileSection}${sourceSection}<p class="not-enriched">Not enriched yet. Re-run the archive-manual skill on this entry to populate summary, specs, and troubleshooting.</p></div>`;
     }
-    const sections = [];
+    const sections = [fileSection, sourceSection].filter(Boolean);
     if (m.summary) {
       sections.push(`<section><h3>Summary</h3><p class="summary">${esc(m.summary)}</p></section>`);
     }
@@ -348,24 +476,28 @@
       const id = m.filename;
       const open = openRows.has(id);
       const zebra = i % 2 === 1 ? " zebra" : "";
+      const pdfIcon = m.status === "downloaded"
+        ? `<a class="file-icon" href="${esc(m.filename)}" onclick="event.stopPropagation()" aria-label="Open ${esc(m.filename)}" title="${esc(m.filename)}">${PDF_SVG}</a>`
+        : `<span class="file-icon file-icon-missing" title="${esc(m.filename)} (not downloaded)" aria-label="Not downloaded">${PDF_SVG}</span>`;
       return `
         <tr class="row-main${zebra}${open ? " open" : ""}" data-id="${esc(id)}">
-          <td><span class="caret">▸</span></td>
-          <td>${esc(m.product)}</td>
-          <td class="filename">${
+          <td class="col-toggle"><span class="caret">▸</span></td>
+          <td class="col-icon">${pdfIcon}</td>
+          <td class="col-product">${esc(m.product)}</td>
+          <td class="col-file filename">${
             m.status === "downloaded"
               ? `<a href="${esc(m.filename)}" onclick="event.stopPropagation()">${esc(m.filename)}</a>`
               : esc(m.filename)
           }</td>
-          <td>${
+          <td class="col-source">${
             m.source_url
               ? `<a href="${esc(m.source_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(m.source_name || m.source_url)}</a>`
               : esc(m.source_name)
           }</td>
-          <td>${esc(m.date_saved)}</td>
-          <td>${statusBadge(m.status)}</td>
+          <td class="col-saved">${esc(formatDate(m.date_saved))}</td>
+          <td class="col-status">${statusBadge(m.status)}</td>
         </tr>
-        ${open ? `<tr class="row-detail"><td colspan="6">${detailHTML(m)}</td></tr>` : ""}
+        ${open ? `<tr class="row-detail"><td colspan="7">${detailHTML(m)}</td></tr>` : ""}
       `;
     }).join("");
 
@@ -401,6 +533,26 @@
   });
 
   render();
+
+  // Theme toggle. Persists explicit choice in localStorage; falls back to OS preference.
+  (function(){
+    const root = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+    function currentTheme() {
+      if (root.dataset.theme === 'light' || root.dataset.theme === 'dark') return root.dataset.theme;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    function updateLabel() {
+      btn.setAttribute('aria-label', currentTheme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+    }
+    updateLabel();
+    btn.addEventListener('click', () => {
+      const next = currentTheme() === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      try { localStorage.setItem('manuals-theme', next); } catch(e) {}
+      updateLabel();
+    });
+  })();
 </script>
 </body>
 </html>
