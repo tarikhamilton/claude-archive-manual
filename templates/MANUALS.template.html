@@ -12,6 +12,7 @@
     --border: #e0e0e0;
     --hover: #f0f0f0;
     --row-open: #f4f4f4;
+    --zebra: #f3f3f3;
     --panel: #ffffff;
     --accent: #0066cc;
     --downloaded: #1a7f37;
@@ -26,6 +27,7 @@
       --border: #333;
       --hover: #2a2a2a;
       --row-open: #242424;
+      --zebra: #1e1e1e;
       --panel: #202020;
       --accent: #58a6ff;
       --downloaded: #3fb950;
@@ -42,7 +44,7 @@
     color: var(--fg);
     line-height: 1.5;
   }
-  .container { max-width: 1200px; margin: 0 auto; }
+  .container { width: 100%; }
   h1 { margin: 0 0 0.25rem; font-size: 1.75rem; }
   .stats { color: var(--muted); margin: 0 0 1.5rem; font-size: 0.9rem; }
   #search {
@@ -65,6 +67,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 0.92rem;
+    table-layout: fixed;
   }
   thead { position: sticky; top: 0; background: var(--bg); z-index: 1; }
   th, td {
@@ -72,6 +75,7 @@
     padding: 0.6rem 0.75rem;
     border-bottom: 1px solid var(--border);
     vertical-align: top;
+    word-break: break-word;
   }
   th {
     cursor: pointer;
@@ -89,7 +93,8 @@
   th.sorted-asc .arrow::after { content: "↑"; }
   th.sorted-desc .arrow::after { content: "↓"; }
   th.col-toggle { width: 1.8rem; padding-right: 0; cursor: default; }
-  tr.row-main { cursor: pointer; }
+  tr.row-main { cursor: pointer; background: var(--bg); }
+  tr.row-main.zebra { background: var(--zebra); }
   tr.row-main:hover { background: var(--hover); }
   tr.row-main.open { background: var(--row-open); }
   tr.row-main.open td { border-bottom-color: transparent; }
@@ -217,6 +222,14 @@
   <input id="search" type="search" placeholder="Filter across product, file, source, summary, specs, troubleshooting, full text&hellip;" autofocus>
   <p class="count" id="count"></p>
   <table>
+    <colgroup>
+      <col style="width:2rem">
+      <col style="width:28%">
+      <col style="width:24%">
+      <col style="width:22%">
+      <col style="width:7rem">
+      <col style="width:10rem">
+    </colgroup>
     <thead>
       <tr>
         <th class="col-toggle"></th>
@@ -331,11 +344,12 @@
     }
 
     const tbody = $("#tbody");
-    tbody.innerHTML = rows.map((m) => {
+    tbody.innerHTML = rows.map((m, i) => {
       const id = m.filename;
       const open = openRows.has(id);
+      const zebra = i % 2 === 1 ? " zebra" : "";
       return `
-        <tr class="row-main${open ? " open" : ""}" data-id="${esc(id)}">
+        <tr class="row-main${zebra}${open ? " open" : ""}" data-id="${esc(id)}">
           <td><span class="caret">▸</span></td>
           <td>${esc(m.product)}</td>
           <td class="filename">${

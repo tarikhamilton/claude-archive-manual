@@ -90,4 +90,4 @@ Multiple products in one request are handled in parallel.
 
 ## License
 
-MIT.
+MIT — see [LICENSE](./LICENSE).
