@@ -33,4 +33,7 @@ if [ ! -s "$FILE" ]; then
   exit 1
 fi
 
-pdftotext -layout "$FILE" - 2>/dev/null | tr -s '[:space:]' ' '
+# sed collapses runs of 4+ dots (PDF table-of-contents "dot leaders") into a single space.
+# 4+ avoids damaging legitimate ellipses (...).
+# tr then collapses any whitespace runs introduced by the dot replacement.
+pdftotext -layout "$FILE" - 2>/dev/null | sed 's/\.\{4,\}/ /g' | tr -s '[:space:]' ' '
