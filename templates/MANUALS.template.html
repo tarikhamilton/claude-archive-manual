@@ -11,9 +11,12 @@
     --muted: #666;
     --border: #e0e0e0;
     --hover: #f0f0f0;
+    --row-open: #f4f4f4;
+    --panel: #ffffff;
     --accent: #0066cc;
     --downloaded: #1a7f37;
     --pending: #bf8700;
+    --chip-bg: #eef2f7;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -22,9 +25,12 @@
       --muted: #999;
       --border: #333;
       --hover: #2a2a2a;
+      --row-open: #242424;
+      --panel: #202020;
       --accent: #58a6ff;
       --downloaded: #3fb950;
       --pending: #d29922;
+      --chip-bg: #2a3140;
     }
   }
   * { box-sizing: border-box; }
@@ -60,7 +66,7 @@
     border-collapse: collapse;
     font-size: 0.92rem;
   }
-  thead { position: sticky; top: 0; background: var(--bg); }
+  thead { position: sticky; top: 0; background: var(--bg); z-index: 1; }
   th, td {
     text-align: left;
     padding: 0.6rem 0.75rem;
@@ -82,7 +88,102 @@
   th.sorted-asc .arrow, th.sorted-desc .arrow { opacity: 1; }
   th.sorted-asc .arrow::after { content: "↑"; }
   th.sorted-desc .arrow::after { content: "↓"; }
-  tbody tr:hover { background: var(--hover); }
+  th.col-toggle { width: 1.8rem; padding-right: 0; cursor: default; }
+  tr.row-main { cursor: pointer; }
+  tr.row-main:hover { background: var(--hover); }
+  tr.row-main.open { background: var(--row-open); }
+  tr.row-main.open td { border-bottom-color: transparent; }
+  .caret {
+    display: inline-block;
+    width: 0.9rem;
+    text-align: center;
+    color: var(--muted);
+    transition: transform 0.12s ease;
+  }
+  tr.row-main.open .caret { transform: rotate(90deg); }
+  tr.row-detail td { padding: 0; }
+  .detail {
+    padding: 1rem 1.25rem 1.5rem;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+  }
+  .detail h3 {
+    margin: 0 0 0.4rem;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .detail section { margin-bottom: 1.25rem; }
+  .detail section:last-child { margin-bottom: 0; }
+  .summary { font-size: 0.95rem; }
+  dl.specs {
+    display: grid;
+    grid-template-columns: minmax(8rem, auto) 1fr;
+    gap: 0.35rem 1rem;
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  dl.specs dt {
+    color: var(--muted);
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+  dl.specs dd { margin: 0; }
+  ul.features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  ul.features li {
+    background: var(--chip-bg);
+    color: var(--fg);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.82rem;
+  }
+  details.tshoot {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.4rem;
+    background: var(--bg);
+  }
+  details.tshoot[open] { background: var(--hover); }
+  details.tshoot summary {
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.92rem;
+    list-style: none;
+  }
+  details.tshoot summary::marker, details.tshoot summary::-webkit-details-marker { display: none; }
+  details.tshoot summary::before {
+    content: "▸";
+    display: inline-block;
+    width: 1em;
+    color: var(--muted);
+    transition: transform 0.12s;
+  }
+  details.tshoot[open] summary::before { transform: rotate(90deg); }
+  details.tshoot .fix {
+    margin: 0.5rem 0 0 1.2rem;
+    font-size: 0.9rem;
+    color: var(--fg);
+  }
+  details.tshoot .page-ref {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-left: 0.4rem;
+  }
+  .not-enriched {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 0.9rem;
+  }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   .filename { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
@@ -101,17 +202,24 @@
     text-align: center;
     color: var(--muted);
   }
+  mark {
+    background: color-mix(in srgb, var(--accent) 25%, transparent);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>Manuals</h1>
   <p class="stats" id="stats"></p>
-  <input id="search" type="search" placeholder="Filter by product, file, source, status&hellip;" autofocus>
+  <input id="search" type="search" placeholder="Filter across product, file, source, summary, specs, troubleshooting, full text&hellip;" autofocus>
   <p class="count" id="count"></p>
   <table>
     <thead>
       <tr>
+        <th class="col-toggle"></th>
         <th data-key="product">Product <span class="arrow"></span></th>
         <th data-key="filename">File <span class="arrow"></span></th>
         <th data-key="source_name">Source <span class="arrow"></span></th>
@@ -129,6 +237,7 @@
 
   let sortKey = "date_saved";
   let sortDir = -1;
+  const openRows = new Set();
 
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => document.querySelectorAll(s);
@@ -139,12 +248,17 @@
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+  const isEnriched = (m) =>
+    Boolean(m.summary || m.specs || m.key_features || (m.troubleshooting && m.troubleshooting.length));
+
   function statsLine() {
     const total = DATA.length;
     const dl = DATA.filter((m) => m.status === "downloaded").length;
     const pending = total - dl;
+    const enriched = DATA.filter(isEnriched).length;
     const parts = [`${total} manual${total === 1 ? "" : "s"}`, `${dl} downloaded`];
     if (pending) parts.push(`${pending} need${pending === 1 ? "s" : ""} manual download`);
+    if (total) parts.push(`${enriched} enriched`);
     return parts.join(" · ");
   }
 
@@ -153,13 +267,58 @@
     return '<span class="status pending">manual download</span>';
   }
 
+  // Concatenate all searchable text for a manual once, used by the filter.
+  function searchableText(m) {
+    const parts = [
+      m.product, m.filename, m.source_name, m.source_url,
+      m.date_saved, m.status, m.summary, m.full_text,
+    ];
+    if (m.specs) parts.push(Object.entries(m.specs).map(([k, v]) => `${k} ${v}`).join(" "));
+    if (m.key_features) parts.push(m.key_features.join(" "));
+    if (m.troubleshooting) {
+      parts.push(m.troubleshooting.map((t) => `${t.question} ${t.fix}`).join(" "));
+    }
+    return parts.filter(Boolean).join(" ").toLowerCase();
+  }
+
+  function detailHTML(m) {
+    if (!isEnriched(m)) {
+      return '<div class="detail"><p class="not-enriched">Not enriched yet. Re-run the archive-manual skill on this entry to populate summary, specs, and troubleshooting.</p></div>';
+    }
+    const sections = [];
+    if (m.summary) {
+      sections.push(`<section><h3>Summary</h3><p class="summary">${esc(m.summary)}</p></section>`);
+    }
+    if (m.specs) {
+      const presentSpecs = Object.entries(m.specs).filter(
+        ([_, v]) => v !== null && v !== undefined && String(v).trim() !== ""
+      );
+      if (presentSpecs.length) {
+        const items = presentSpecs
+          .map(([k, v]) => `<dt>${esc(k.replace(/_/g, " "))}</dt><dd>${esc(v)}</dd>`)
+          .join("");
+        sections.push(`<section><h3>Specs</h3><dl class="specs">${items}</dl></section>`);
+      }
+    }
+    if (m.key_features && m.key_features.length) {
+      const chips = m.key_features.map((f) => `<li>${esc(f)}</li>`).join("");
+      sections.push(`<section><h3>Key Features</h3><ul class="features">${chips}</ul></section>`);
+    }
+    if (m.troubleshooting && m.troubleshooting.length) {
+      const items = m.troubleshooting.map((t) => `
+        <details class="tshoot">
+          <summary>${esc(t.question)}${t.page ? `<span class="page-ref">p. ${esc(t.page)}</span>` : ""}</summary>
+          <p class="fix">${esc(t.fix)}</p>
+        </details>
+      `).join("");
+      sections.push(`<section><h3>Troubleshooting</h3>${items}</section>`);
+    }
+    return `<div class="detail">${sections.join("")}</div>`;
+  }
+
   function render() {
     const q = $("#search").value.trim().toLowerCase();
-    let rows = DATA.filter((m) => {
-      if (!q) return true;
-      return ["product", "filename", "source_name", "source_url", "date_saved", "status"]
-        .some((k) => String(m[k] ?? "").toLowerCase().includes(q));
-    });
+    let rows = DATA.filter((m) => !q || searchableText(m).includes(q));
 
     if (sortKey) {
       rows.sort((a, b) => {
@@ -172,30 +331,36 @@
     }
 
     const tbody = $("#tbody");
-    tbody.innerHTML = rows.map((m) => `
-      <tr>
-        <td>${esc(m.product)}</td>
-        <td class="filename">${
-          m.status === "downloaded"
-            ? `<a href="${esc(m.filename)}">${esc(m.filename)}</a>`
-            : esc(m.filename)
-        }</td>
-        <td>${
-          m.source_url
-            ? `<a href="${esc(m.source_url)}" target="_blank" rel="noopener">${esc(m.source_name || m.source_url)}</a>`
-            : esc(m.source_name)
-        }</td>
-        <td>${esc(m.date_saved)}</td>
-        <td>${statusBadge(m.status)}</td>
-      </tr>
-    `).join("");
+    tbody.innerHTML = rows.map((m) => {
+      const id = m.filename;
+      const open = openRows.has(id);
+      return `
+        <tr class="row-main${open ? " open" : ""}" data-id="${esc(id)}">
+          <td><span class="caret">▸</span></td>
+          <td>${esc(m.product)}</td>
+          <td class="filename">${
+            m.status === "downloaded"
+              ? `<a href="${esc(m.filename)}" onclick="event.stopPropagation()">${esc(m.filename)}</a>`
+              : esc(m.filename)
+          }</td>
+          <td>${
+            m.source_url
+              ? `<a href="${esc(m.source_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(m.source_name || m.source_url)}</a>`
+              : esc(m.source_name)
+          }</td>
+          <td>${esc(m.date_saved)}</td>
+          <td>${statusBadge(m.status)}</td>
+        </tr>
+        ${open ? `<tr class="row-detail"><td colspan="6">${detailHTML(m)}</td></tr>` : ""}
+      `;
+    }).join("");
 
     $("#empty").hidden = rows.length !== 0;
     $("#count").textContent = q
       ? `${rows.length} of ${DATA.length} shown`
       : `${DATA.length} total`;
 
-    $$("th").forEach((th) => {
+    $$("th[data-key]").forEach((th) => {
       const key = th.dataset.key;
       th.classList.toggle("sorted-asc", key === sortKey && sortDir === 1);
       th.classList.toggle("sorted-desc", key === sortKey && sortDir === -1);
@@ -204,13 +369,21 @@
 
   $("#stats").textContent = statsLine();
   $("#search").addEventListener("input", render);
-  $$("th").forEach((th) => {
+  $$("th[data-key]").forEach((th) => {
     th.addEventListener("click", () => {
       const key = th.dataset.key;
       if (key === sortKey) sortDir *= -1;
       else { sortKey = key; sortDir = 1; }
       render();
     });
+  });
+  $("#tbody").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr.row-main");
+    if (!tr) return;
+    const id = tr.dataset.id;
+    if (openRows.has(id)) openRows.delete(id);
+    else openRows.add(id);
+    render();
   });
 
   render();

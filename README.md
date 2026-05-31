@@ -1,40 +1,45 @@
 # archive-manual
 
-A [Claude Code](https://docs.claude.com/claude-code) skill that finds official instruction manuals online, downloads them to a local directory, keeps a JSON index, and regenerates a `MANUALS.md` summary table.
+A [Claude Code](https://docs.claude.com/claude-code) skill that finds official instruction manuals online, downloads them to a local directory, AI-enriches each entry with a summary + spec sheet + troubleshooting list, keeps a JSON index, and regenerates a sortable + filterable browser view.
 
-Trigger it by mentioning a product manual you want to save, archive, or download — or by saying you want to toss/throw away a physical manual. The skill handles search, download, indexing, and summary regeneration in one pass.
+Trigger it by mentioning a product manual you want to save, archive, or download — or by saying you want to toss/throw away a physical manual. The skill handles search, download, indexing, enrichment, and summary regeneration in one pass.
 
 ## Install
 
 Drop the `archive-manual/` folder into `~/.claude/skills/`:
 
 ```bash
-git clone https://github.com/<owner>/archive-manual.git ~/.claude/skills/archive-manual
+git clone https://github.com/tarikhamilton/claude-archive-manual.git ~/.claude/skills/archive-manual
 ```
 
 Or hand the SKILL.md URL to Claude and ask it to install — it'll figure out the right path.
 
+## Requirements
+
+- Python 3 (ships with macOS; nothing to install)
+- `pdftotext` (Poppler), **optional** — only needed for full-text PDF search. Install with `brew install poppler`. Without it, search still works across product / file / source / summary / specs / troubleshooting; just not across the raw PDF body.
+
 ## Configuration
 
-The skill saves manuals to whichever directory `CLAUDE_MANUALS_DIR` points at. If the env var is unset, it defaults to `~/Manuals/`.
-
-To use a different directory (e.g. a synced cloud folder), set the env var in your Claude Code settings — `~/.claude/settings.json`:
+All settings are environment variables. Set them in your Claude Code settings — `~/.claude/settings.json`:
 
 ```json
 {
   "env": {
-    "CLAUDE_MANUALS_DIR": "/Users/you/Dropbox/Manuals"
+    "CLAUDE_MANUALS_DIR": "/Users/you/Dropbox/Manuals",
+    "CLAUDE_MANUALS_AUTO_ENRICH": "true"
   }
 }
 ```
 
-Or in your shell rc (`~/.zshrc`, `~/.bashrc`):
+Or in your shell rc (`~/.zshrc`, `~/.bashrc`) for system-wide use.
 
-```bash
-export CLAUDE_MANUALS_DIR="$HOME/Dropbox/Manuals"
-```
+| Variable | Default | What it does |
+|---|---|---|
+| `CLAUDE_MANUALS_DIR` | `~/Manuals` | Where manuals + the index + the HTML page live. |
+| `CLAUDE_MANUALS_AUTO_ENRICH` | `true` | When `true` (or unset), each archive runs an AI-extraction pass to populate summary, specs, key features, and troubleshooting. Set to `false`, `0`, `no`, or `off` to disable globally. |
 
-Both work. The `settings.json` route scopes the variable to Claude Code only. The shell rc route makes it available system-wide.
+You can also opt out of enrichment for a single request by including phrases like "skip enrichment", "just save the file", "no summary", or "minimal" in your prompt.
 
 ## What it produces
 
@@ -43,13 +48,29 @@ Inside the manuals directory:
 ```
 <CLAUDE_MANUALS_DIR>/
 ├── .manuals-index.json     ← source of truth, one entry per manual
-├── MANUALS.html            ← sortable + filterable browser view (open in any browser)
+├── MANUALS.html            ← sortable, filterable, expandable browser view
 └── *.pdf                   ← the manuals themselves (kebab-case filenames)
 ```
 
-The JSON index tracks each manual's product name, filename, source URL, date saved, and status (`downloaded` or `manual-download` — the latter for cases where no direct PDF exists and the user has to grab it themselves).
+`MANUALS.html` is a self-contained page (vanilla JS, no external dependencies, dark-mode aware). Open it in any browser. Click column headers to sort, type in the search box to filter across all fields, click any row to expand its detail panel (summary, specs, key features as chips, troubleshooting as nested accordion). Click filenames to open the PDFs.
 
-`MANUALS.html` is a self-contained page (vanilla JS, no external dependencies, dark-mode aware) generated from the index. Open it in any browser. Click column headers to sort, type in the search box to filter, click filenames to open the PDFs.
+## How it works
+
+The skill ships three small helper scripts that handle the deterministic operations — JSON mutation, HTML regeneration, PDF text extraction. The skill body itself handles the LLM-judgment parts (web search, PDF reading + summarization, opt-out phrase recognition).
+
+```
+archive-manual/
+├── SKILL.md
+├── README.md
+├── scripts/
+│   ├── upsert.py           ← atomic merge-by-filename into .manuals-index.json
+│   ├── regen.py            ← stamp the JSON into the HTML template
+│   └── extract-text.sh     ← pdftotext wrapper, graceful fallback
+└── templates/
+    └── MANUALS.template.html
+```
+
+This split keeps the skill body shorter and means the model doesn't have to hand-roll JSON merges on every archive — the script does it deterministically.
 
 ## Use
 
@@ -60,6 +81,10 @@ Just talk to Claude:
 > "I want to throw out the Ninja NC501 Creami Deluxe manual."
 >
 > "Archive manuals for: Bosch 1617 router, Epson ET-8500, LG WM3500CW washer."
+>
+> "Re-enrich the Ninja one."
+>
+> "Save the manual for X — just the file, skip enrichment."
 
 Multiple products in one request are handled in parallel.
 
