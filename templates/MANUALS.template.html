@@ -288,6 +288,55 @@
     padding: 0 2px;
   }
   .detail-file .filename { font-size: 0.88rem; word-break: break-all; }
+  details.match {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.65rem;
+    margin-bottom: 0.35rem;
+    background: var(--bg);
+  }
+  details.match[open] { background: var(--hover); }
+  details.match summary {
+    cursor: pointer;
+    font-size: 0.88rem;
+    list-style: none;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  details.match summary::marker, details.match summary::-webkit-details-marker { display: none; }
+  details.match summary::before {
+    content: "▸";
+    display: inline-block;
+    width: 1em;
+    color: var(--muted);
+    transition: transform 0.12s;
+    flex-shrink: 0;
+  }
+  details.match[open] summary::before { transform: rotate(90deg); }
+  .match-snippet {
+    flex: 1;
+    min-width: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+  details.match[open] .match-snippet {
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+  .match-page { font-size: 0.76rem; color: var(--muted); flex-shrink: 0; text-decoration: none; }
+  .match-page:hover { color: var(--accent); text-decoration: underline; }
+  .match-para {
+    margin: 0.55rem 0 0 1.2rem;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    color: var(--fg);
+  }
+  .match-more { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); }
 
   /* Tablet + mobile: drop the caret-toggle, File, and Source columns from the
      table; surface File via an inline PDF icon next to Product, and put File
@@ -378,6 +427,80 @@
 
   const PDF_SVG = '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V5.5L9.5 0H4zm0 1h5v4a.5.5 0 0 0 .5.5H13V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zm1.5 7.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zm0 2a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5z"/></svg>';
 
+  // Full-text match helpers — for the per-row "Matches in PDF" drawer section.
+  const MAX_MATCHES_PER_DOC = 10;
+  const SNIPPET_CHARS = 60;
+  const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  function findMatchIndices(text, query) {
+    if (!text || !query) return [];
+    const lower = text.toLowerCase();
+    const q = query.toLowerCase();
+    const out = [];
+    let i = 0;
+    while (out.length < MAX_MATCHES_PER_DOC) {
+      const idx = lower.indexOf(q, i);
+      if (idx === -1) break;
+      out.push(idx);
+      i = idx + q.length;
+    }
+    return out;
+  }
+
+  // Form feed (0x0C) separates pages in pdftotext output. Page 1 = before any \f.
+  function pageForOffset(text, idx) {
+    let page = 1;
+    const end = Math.min(idx, text.length);
+    for (let i = 0; i < end; i++) {
+      if (text.charCodeAt(i) === 12) page++;
+    }
+    return page;
+  }
+
+  function snippetAround(text, idx, queryLen) {
+    const start = Math.max(0, idx - SNIPPET_CHARS);
+    const end = Math.min(text.length, idx + queryLen + SNIPPET_CHARS);
+    let s = text.slice(start, end).replace(/[\s\f]+/g, " ").trim();
+    if (start > 0) s = "…" + s;
+    if (end < text.length) s = s + "…";
+    return s;
+  }
+
+  // Paragraph boundary = double newline OR form feed (page break).
+  function paragraphAround(text, idx, queryLen) {
+    let start = idx;
+    while (start > 0) {
+      const c = text.charCodeAt(start - 1);
+      if (c === 12) break;
+      if (c === 10 && start >= 2 && text.charCodeAt(start - 2) === 10) break;
+      start--;
+    }
+    let end = idx + queryLen;
+    while (end < text.length) {
+      const c = text.charCodeAt(end);
+      if (c === 12) break;
+      if (c === 10 && end + 1 < text.length && text.charCodeAt(end + 1) === 10) break;
+      end++;
+    }
+    return text.slice(start, end).replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n\n").trim();
+  }
+
+  function highlightHTML(text, query) {
+    if (!query) return esc(text);
+    const re = new RegExp(escapeRegex(query), "gi");
+    let out = "";
+    let last = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      out += esc(text.slice(last, m.index));
+      out += "<mark>" + esc(m[0]) + "</mark>";
+      last = m.index + m[0].length;
+      if (m.index === re.lastIndex) re.lastIndex++;
+    }
+    out += esc(text.slice(last));
+    return out;
+  }
+
   const isEnriched = (m) =>
     Boolean(m.summary || m.specs || m.key_features || (m.troubleshooting && m.troubleshooting.length));
 
@@ -411,7 +534,29 @@
     return parts.filter(Boolean).join(" ").toLowerCase();
   }
 
-  function detailHTML(m) {
+  function matchesSectionHTML(m, query) {
+    if (!query || !m.full_text) return "";
+    const indices = findMatchIndices(m.full_text, query);
+    if (!indices.length) return "";
+    const items = indices.map((idx) => {
+      const page = pageForOffset(m.full_text, idx);
+      const snippet = snippetAround(m.full_text, idx, query.length);
+      const para = paragraphAround(m.full_text, idx, query.length);
+      const pageLink = m.status === "downloaded"
+        ? `<a class="match-page" href="${esc(m.filename)}#page=${page}" target="_blank" rel="noopener" onclick="event.stopPropagation()">p. ${page} ↗</a>`
+        : `<span class="match-page">p. ${page}</span>`;
+      return `
+        <details class="match">
+          <summary><span class="match-snippet">${highlightHTML(snippet, query)}</span>${pageLink}</summary>
+          <p class="match-para">${highlightHTML(para, query)}</p>
+        </details>
+      `;
+    }).join("");
+    const more = indices.length === MAX_MATCHES_PER_DOC ? ` <span class="match-more">(first ${MAX_MATCHES_PER_DOC})</span>` : "";
+    return `<section class="detail-matches"><h3>Matches in PDF${more}</h3>${items}</section>`;
+  }
+
+  function detailHTML(m, query) {
     const fileLink = m.status === "downloaded"
       ? `<a href="${esc(m.filename)}" class="filename">${esc(m.filename)}</a>`
       : `<span class="filename">${esc(m.filename)}</span>`;
@@ -423,10 +568,11 @@
             : esc(m.source_name)
         }</section>`
       : "";
+    const matchesSection = matchesSectionHTML(m, query);
     if (!isEnriched(m)) {
-      return `<div class="detail">${fileSection}${sourceSection}<p class="not-enriched">Not enriched yet. Re-run the archive-manual skill on this entry to populate summary, specs, and troubleshooting.</p></div>`;
+      return `<div class="detail">${fileSection}${sourceSection}${matchesSection}<p class="not-enriched">Not enriched yet. Re-run the archive-manual skill on this entry to populate summary, specs, and troubleshooting.</p></div>`;
     }
-    const sections = [fileSection, sourceSection].filter(Boolean);
+    const sections = [fileSection, sourceSection, matchesSection].filter(Boolean);
     if (m.summary) {
       sections.push(`<section><h3>Summary</h3><p class="summary">${esc(m.summary)}</p></section>`);
     }
@@ -497,7 +643,7 @@
           <td class="col-saved">${esc(formatDate(m.date_saved))}</td>
           <td class="col-status">${statusBadge(m.status)}</td>
         </tr>
-        ${open ? `<tr class="row-detail"><td colspan="7">${detailHTML(m)}</td></tr>` : ""}
+        ${open ? `<tr class="row-detail"><td colspan="7">${detailHTML(m, q)}</td></tr>` : ""}
       `;
     }).join("");
 
